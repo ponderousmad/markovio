@@ -17,7 +17,7 @@ window.onload = function(e) {
     source = audioCtx.createBufferSource();
     var request = new XMLHttpRequest();
     // Downloaded from http://soundbible.com/1010-Spotted-Owl-Call.html
-    request.open('GET', 'owl.mp3', true);
+    request.open('GET', 'rise.wav', true);
     request.responseType = 'arraybuffer';
     request.onload = function() {
         var audioData = request.response;
@@ -26,7 +26,6 @@ window.onload = function(e) {
             function(buffer) {
                 source.buffer = buffer;
                 source.connect(audioCtx.destination);
-                // source.loop = true;
                 setupGraph();
             },
             function(e) {
@@ -42,8 +41,9 @@ function setupGraph() {
     analyser = audioCtx.createAnalyser();
     source.connect(analyser);
 
-    analyser.fftSize = 256;
+    analyser.fftSize = 512;
     bufferLength = analyser.frequencyBinCount;
+    console.log(bufferLength);
     dataArray = new Uint8Array(bufferLength);
 
     analyser.getByteTimeDomainData(dataArray);
@@ -52,7 +52,21 @@ function setupGraph() {
     canvasCtx = canvas.getContext('2d');
     canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
     
-    source.start(0);  
+    var startButton = document.getElementById("start");
+    startButton.addEventListener("click", function() {
+        var newSource = audioCtx.createBufferSource();
+        newSource.buffer = source.buffer;
+        newSource.connect(analyser);
+        source = newSource;
+        source.connect(audioCtx.destination);
+        source.start();
+    }, false);
+    
+    var stopButton = document.getElementById("stop");
+    stopButton.addEventListener("click", function() {
+        source.stop();
+    }, false);
+    
     draw();
 }
 
@@ -61,16 +75,14 @@ function draw() {
     analyser.getByteFrequencyData(dataArray);
     canvasCtx.fillStyle = 'rgb(200, 200, 200)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-    var barWidth = (canvas.width / bufferLength) * 2.5;
+    var barWidth = (canvas.width - bufferLength) / bufferLength;
     var barHeight;
     var x = 0;
     
+    canvasCtx.fillStyle = 'rgb(200,50,50)';
     for(var i = 0; i < bufferLength; i++) {
-        barHeight = dataArray[i]/2;
-
-        canvasCtx.fillStyle = 'rgb(' + (barHeight+100) + ',50,50)';
-        canvasCtx.fillRect(x,canvas.height-barHeight/2,barWidth,barHeight);
-
+        barHeight = dataArray[i];
+        canvasCtx.fillRect(x,canvas.height-barHeight,barWidth,barHeight);
         x += barWidth + 1;
     }
 }
