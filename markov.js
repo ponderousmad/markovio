@@ -130,9 +130,9 @@ function setupGraph() {
     }, false);
     
     document.getElementById("tone").addEventListener("click", function() {
-        console.log("Playing tone");
         var sampleDuration = 1 / audioCtx.sampleRate;
-        var frequency = 256.0;
+        var frequency = document.getElementById("toneHz").value * 1.0;
+        console.log("Playing tone with frequency " + frequency);
         var sampleWindow = 10.0/frequency;
         var toneLength = sampleWindow * audioCtx.sampleRate;
         var toneBuffer = new Float32Array(toneLength);
