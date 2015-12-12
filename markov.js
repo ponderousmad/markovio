@@ -35,7 +35,6 @@ window.onload = function(e) {
 
     source = audioCtx.createBufferSource();
     var request = new XMLHttpRequest();
-    // Downloaded from http://soundbible.com/1010-Spotted-Owl-Call.html
     request.open('GET', 'dtmf.wav', true);
     request.responseType = 'arraybuffer';
     request.onload = function() {
@@ -87,7 +86,7 @@ function setupGraph() {
     analyser = audioCtx.createAnalyser();
     source.connect(analyser);
 
-    analyser.fftSize = 512;
+    analyser.fftSize = 1024;
     bufferLength = analyser.frequencyBinCount;
     console.log("FFT size: " + bufferLength);
     console.log("Sample rate: " + audioCtx.sampleRate);
@@ -192,29 +191,42 @@ function draw() {
     
     canvasCtx.fillStyle = 'rgb(200, 200, 200)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-    var barWidth = (canvas.width - bufferLength) / bufferLength;
-    var barHeight;
-    var x = 0;  
 
+    var stride = 1;
+    var scaledLength = bufferLength;
+    while(scaledLength > 512) {
+        stride *= 2;
+        scaledLength /= 2;
+    }
+
+    var barWidth = (canvas.width - scaledLength) / scaledLength;
+    var x = 0;
+    
     var frequencyScale = 1/256.0;
     var heightScale = (canvas.height - 20) * frequencyScale;
     var altHeightScale = (canvas.height - 20) / Math.max(1, scaleMax);
-    for(var i = 0; i < bufferLength; i++) {
-        barHeight = frequencyArray[i] * heightScale;
-        var altBarHeight = realFrequencies[i] * altHeightScale;
+    for(var i = 0; i < bufferLength; i += stride) {
+        var barHeight = 0;
+        var altBarHeight = 0;
+        for(var s = 0; s < stride; ++s) {
+            barHeight += frequencyArray[i] * heightScale;
+            altBarHeight += realFrequencies[i] * altHeightScale;
+        }
+        barHeight /= stride;
+        altBarHeight /= stride;
         canvasCtx.fillStyle = 'rgb(200,50,50)';
-        canvasCtx.fillRect(x+1,canvas.height-barHeight,barWidth,barHeight);
+        canvasCtx.fillRect(x,canvas.height-barHeight,1,barHeight);
         canvasCtx.fillStyle = 'rgb(50,200,50)';
-        canvasCtx.fillRect(x,canvas.height-altBarHeight,barWidth + 1,altBarHeight);
+        canvasCtx.fillRect(x+1,canvas.height-altBarHeight,barWidth,altBarHeight);
         x += barWidth + 1;
     }
     
-    var sliceWidth = canvas.width * 1.0 / bufferLength;
-    canvasCtx.lineWidth = 1;   
+    var sliceWidth = canvas.width * 1.0 / scaledLength;
+    canvasCtx.lineWidth = 2;
     canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
     canvasCtx.beginPath();
     x = 0;
-    for(var i = 0; i < bufferLength; i++) {
+    for(var i = 0; i < bufferLength; i += stride) {
         var v = waveformArray[i] / 128.0;
         var y = v * canvas.height / 2;
         if(i === 0) {
@@ -228,10 +240,11 @@ function draw() {
     canvasCtx.stroke();
     
     inverseFourier(realFrequencies, imagFrequencies, reconstruction);
+    canvasCtx.lineWidth = 1;
     canvasCtx.strokeStyle = 'rgb(0, 255, 255)';
     canvasCtx.beginPath();
     x = 0;
-    for(i = 0; i < bufferLength; ++i) {
+    for(i = 0; i < bufferLength; i += stride) {
         var v = reconstruction[i] + 1;
         y = v * canvas.height / 2;
 
