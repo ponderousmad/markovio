@@ -8,6 +8,8 @@ var source;
 var sourceBuffer;
 var bufferLength;
 var frequencyArray;
+var realFrequencies;
+var imagFrequencies;
 var waveformArray;
 var reconstruction;
 var snapshot = false;
@@ -94,6 +96,9 @@ function setupGraph() {
     frequencyArray = new Uint8Array(bufferLength);
     waveformArray = new Uint8Array(bufferLength);
     reconstruction = new Float32Array(bufferLength);
+    
+    realFrequencies = new Float32Array(bufferLength);
+    imagFrequencies = new Float32Array(bufferLength);
   
     canvas = document.getElementById("canvas");
     canvasCtx = canvas.getContext('2d');
@@ -145,19 +150,35 @@ function setupGraph() {
 
 // Attempt to implement Discreet Fourier Transform
 // https://en.wikipedia.org/wiki/Discrete_Fourier_transform#Definition
-// Clearly doesn't seem to be working.
-function fourier(timeBuffer, frequecyBuffer) {
-    var timeScale = 1.0 / timeBuffer.length;
-    for(var k = 0; k < frequecyBuffer.length; ++k) {
+function fourier(waveform, frequenciesR, frequenciesI) {
+    var timeScale = 1.0 / waveform.length
+    var maxFrequency = 0.0;
+    for(var k = 0; k < frequenciesR.length; ++k) {
         var realF = 0;
         var imagF = 0;
-        for(var n = 0; n < timeBuffer.length; ++n) {
-            var v = timeBuffer[n];
-            var theta = -2 * Math.PI * k * n * timeScale;
-            realF = v * Math.cos(theta);
-            imagF += Math.sin(theta);
+        for(var n = 0; n < waveform.length; ++n) {
+            var v = (waveform[n] / 128.0) - 1; // scale and unbias
+            var theta = 2 * Math.PI * n * k * timeScale;
+            realF += v * Math.cos(theta);
+            imagF -= v * Math.sin(theta);
         }
-        frequecyBuffer[k] = realF * 256;
+        frequenciesR[k] = realF;
+        frequenciesI[k] = imagF;
+        maxFrequency = Math.max(realF, maxFrequency);
+    }
+    return maxFrequency;
+}
+
+// Inverse DFT as above.
+function inverseFourier(frequenciesR, frequenciesI, waveform) {
+    var timeScale = 1.0 / waveform.length
+    for(var n = 0; n < waveform.length; ++n) {
+        var v = 0;
+        for(var k = 0; k < frequenciesR.length; ++k) {
+            var theta = 2 * Math.PI * n * k * timeScale;
+            v += frequenciesR[k] * Math.cos(theta) - frequenciesI[k] * Math.sin(theta);
+        }
+        waveform[n] = v * timeScale;
     }
 }
 
@@ -167,46 +188,35 @@ function draw() {
         analyser.getByteFrequencyData(frequencyArray);
         analyser.getByteTimeDomainData(waveformArray);
     }
+    var scaleMax = fourier(waveformArray, realFrequencies, imagFrequencies);
+    
     canvasCtx.fillStyle = 'rgb(200, 200, 200)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
     var barWidth = (canvas.width - bufferLength) / bufferLength;
     var barHeight;
-    var x = 0;
-  
-    canvasCtx.fillStyle = 'rgb(200,50,50)';
+    var x = 0;  
+
     var frequencyScale = 1/256.0;
     var heightScale = (canvas.height - 20) * frequencyScale;
+    var altHeightScale = (canvas.height - 20) / Math.max(1, scaleMax);
     for(var i = 0; i < bufferLength; i++) {
         barHeight = frequencyArray[i] * heightScale;
-        canvasCtx.fillRect(x,canvas.height-barHeight,barWidth,barHeight);
+        var altBarHeight = realFrequencies[i] * altHeightScale;
+        canvasCtx.fillStyle = 'rgb(200,50,50)';
+        canvasCtx.fillRect(x+1,canvas.height-barHeight,barWidth,barHeight);
+        canvasCtx.fillStyle = 'rgb(50,200,50)';
+        canvasCtx.fillRect(x,canvas.height-altBarHeight,barWidth + 1,altBarHeight);
         x += barWidth + 1;
     }
     
-    canvasCtx.lineWidth = 1;
-    canvasCtx.strokeStyle = 'rgb(0, 0, 255)';
-
     var sliceWidth = canvas.width * 1.0 / bufferLength;
-    
+    canvasCtx.lineWidth = 1;   
+    canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
     canvasCtx.beginPath();
     x = 0;
-    var sampleDuration = 1 / audioCtx.sampleRate;
-    var sampleWindow = bufferLength * sampleDuration;
-    var maxFrequency = audioCtx.sampleRate * .5;
-    for(i = 0; i < bufferLength; ++i) {
-        var t = i * sampleDuration;
-        var v = 0;
-        for(var f = 0; f < bufferLength; ++f) {
-            var frequency = (maxFrequency * f) / bufferLength;
-            var amplitude = frequencyArray[f] * frequencyScale;
-            if(amplitude > 0) {
-                v += amplitude * Math.cos(t * frequency * Math.PI);
-            }
-        }
-        if(!snapshot) {
-            reconstruction[i] = v;
-        }
-        y = (v + 1) * canvas.height / 2;
-
+    for(var i = 0; i < bufferLength; i++) {
+        var v = waveformArray[i] / 128.0;
+        var y = v * canvas.height / 2;
         if(i === 0) {
             canvasCtx.moveTo(x, y);
         } else {
@@ -217,13 +227,14 @@ function draw() {
     canvasCtx.lineTo(canvas.width, canvas.height/2);
     canvasCtx.stroke();
     
-    canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
-
+    inverseFourier(realFrequencies, imagFrequencies, reconstruction);
+    canvasCtx.strokeStyle = 'rgb(0, 255, 255)';
     canvasCtx.beginPath();
     x = 0;
-    for(var i = 0; i < bufferLength; i++) {
-        var v = waveformArray[i] / 128.0;
-        var y = v * canvas.height / 2;
+    for(i = 0; i < bufferLength; ++i) {
+        var v = reconstruction[i] + 1;
+        y = v * canvas.height / 2;
+
         if(i === 0) {
             canvasCtx.moveTo(x, y);
         } else {
