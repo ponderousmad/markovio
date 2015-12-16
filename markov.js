@@ -151,7 +151,6 @@ function setupGraph() {
 // https://en.wikipedia.org/wiki/Discrete_Fourier_transform#Definition
 function fourier(waveform, frequenciesR, frequenciesI) {
     var timeScale = 1.0 / waveform.length
-    var maxFrequency = 0.0;
     for(var k = 0; k < frequenciesR.length; ++k) {
         var realF = 0;
         var imagF = 0;
@@ -163,9 +162,7 @@ function fourier(waveform, frequenciesR, frequenciesI) {
         }
         frequenciesR[k] = realF;
         frequenciesI[k] = imagF;
-        maxFrequency = Math.max(realF, maxFrequency);
     }
-    return maxFrequency;
 }
 
 // Inverse DFT as above.
@@ -187,7 +184,7 @@ function draw() {
         analyser.getByteFrequencyData(frequencyArray);
         analyser.getByteTimeDomainData(waveformArray);
     }
-    var scaleMax = fourier(waveformArray, realFrequencies, imagFrequencies);
+    fourier(waveformArray, realFrequencies, imagFrequencies);
     
     canvasCtx.fillStyle = 'rgb(200, 200, 200)';
     canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
@@ -199,26 +196,28 @@ function draw() {
         scaledLength /= 2;
     }
 
-    var barWidth = (canvas.width - scaledLength) / scaledLength;
+    var barWidth = (canvas.width * .5) / scaledLength;
     var x = 0;
     
     var frequencyScale = 1/256.0;
-    var heightScale = (canvas.height - 20) * frequencyScale;
-    var altHeightScale = (canvas.height - 20) / Math.max(1, scaleMax);
+    var heightScale = (canvas.height - 10) / bufferLength;
+    var halfHeight = canvas.height * 0.5;
+    canvasCtx.fillStyle = 'rgb(100, 100, 100)';
+    canvasCtx.fillRect(0, halfHeight, canvas.width, 1);
     for(var i = 0; i < bufferLength; i += stride) {
-        var barHeight = 0;
-        var altBarHeight = 0;
+        var sinBarHeight = 0;
+        var cosBarHeight = 0;
         for(var s = 0; s < stride; ++s) {
-            barHeight += frequencyArray[i] * heightScale;
-            altBarHeight += realFrequencies[i] * altHeightScale;
+            sinBarHeight += imagFrequencies[i] * heightScale;
+            cosBarHeight += realFrequencies[i] * heightScale;
         }
-        barHeight /= stride;
-        altBarHeight /= stride;
+        sinBarHeight /= stride;
+        cosBarHeight /= stride;
         canvasCtx.fillStyle = 'rgb(200,50,50)';
-        canvasCtx.fillRect(x,canvas.height-barHeight,1,barHeight);
+        canvasCtx.fillRect(x,halfHeight,barWidth,-sinBarHeight);
         canvasCtx.fillStyle = 'rgb(50,200,50)';
-        canvasCtx.fillRect(x+1,canvas.height-altBarHeight,barWidth,altBarHeight);
-        x += barWidth + 1;
+        canvasCtx.fillRect(x+barWidth,halfHeight,barWidth,cosBarHeight);
+        x += 2 * barWidth;
     }
     
     var sliceWidth = canvas.width * 1.0 / scaledLength;
