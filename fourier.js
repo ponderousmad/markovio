@@ -213,9 +213,9 @@ function draw() {
         }
         sinBarHeight /= stride;
         cosBarHeight /= stride;
-        canvasCtx.fillStyle = 'rgb(200,50,50)';
+        canvasCtx.fillStyle = 'rgb(200,0,0)';
         canvasCtx.fillRect(x,halfHeight,barWidth,-sinBarHeight);
-        canvasCtx.fillStyle = 'rgb(50,200,50)';
+        canvasCtx.fillStyle = 'rgb(0,0,200)';
         canvasCtx.fillRect(x+barWidth,halfHeight,barWidth,cosBarHeight);
         x += 2 * barWidth;
     }
